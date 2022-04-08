@@ -3,7 +3,5 @@ pandas
 streamlit
 numpy
 plotly.express
-openpyxl
-math
 plotly.graph_objects
 scipy.optimize
