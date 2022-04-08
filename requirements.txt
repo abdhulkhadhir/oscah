@@ -4,4 +4,4 @@ streamlit
 numpy
 plotly.express
 plotly
-scipy.optimize
+scipy
