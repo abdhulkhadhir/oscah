@@ -9,10 +9,13 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import plotly.express as px
+import openpyxl
 import math
 import plotly.express as px
 import plotly.graph_objects as go
 from scipy.optimize import minimize, Bounds, brute
+
+
 
 # %% Constants initialisation
 n_lanes = {'EB': 2, 'WB': 2, 'NB': 2, 'SB' : 2}
@@ -54,7 +57,7 @@ def webster_timings(demand):
     C = math.ceil((1.5*L + 5) / (1-Y))
     eff_g = C - L
     demand['greens_actual'] =round( (eff_g/Y) * demand.v_s )
-    demand['greens_limitted'] = [max(min(x, 200), 8) for x in demand['greens_actual']]
+    demand['greens_limitted'] = [max(min(x, 201), 8) for x in demand['greens_actual']]
     return list(demand.greens_limitted)
 
 # Objective function
@@ -160,7 +163,7 @@ with st.expander('Input Parameters'):
                             
         
     # %% Signal timings
-        st.subheader("Signbal Timing Input")
+        st.subheader("Signal Timing Input")
         l = int(st.text_input('Enter lost time per phase', 4, key = 'lost_time'))
         st.write('Enter the effective green times provided')
         a = {} 
@@ -172,7 +175,7 @@ with st.expander('Input Parameters'):
         greens0 = webster_timings(demand)
         bounds = []
         for appr in range(1, n_appr+1):
-            greens[appr] = int(st.text_input(f'The effective green time for approach {appr}: ', 
+            greens[appr] = float(st.text_input(f'The effective green time for approach {appr}: ', 
                                            int(greens0[appr-1]), key = 'greens_'+str(appr)))
             bounds.append([8,201])
         bounds = tuple(bounds)  
@@ -205,41 +208,102 @@ with st.expander('Delay calculation', calc_bool):
     
     with c2:
         st.subheader('Approach-Wise control delays')
-        st.dataframe(delays_df)
+        tab2 = go.Figure(data=[go.Table(
+            header = dict(values = list(delays_df.columns),
+                          align = 'center'),
+            cells = dict(values =[delays_df['Intersection Approach'], delays_df['Control delay (s/PCE)'], delays_df['Total Control delay (s)']],
+                         align = 'center'))
+            ])
+        tab2.update_layout(
+            template = 'plotly_dark')
+        #delays_df = delays_df.set_index('Intersection Approach')
+        st.table(delays_df)
+        #st.plotly_chart(tab2, use_container_width=False)
         st.subheader('Intersection Delay')
         st.metric(label="Average Intersection Control Delay", value=str(round(intersection_delay, 1))+" s/PCE")
     
 # %% Signal Optimisation
 with st.expander("Signal Optimisation", opt_bool):
-    st.header("Optimal Singal Timings")
-    
-    fun0 = obj_function(greens0)
-    res = minimize(obj_function, greens0, method='trust-constr',
-                   tol = 0.001, bounds=bounds)    
-    greens_opt = list(np.round(res.x, 1))
-    inter_delay_after = (np.round(res.fun,1))
-    inter_delay_before = (np.round(fun0,1))
-    red_perc = round(100*(inter_delay_before - inter_delay_after)/inter_delay_before,1)
-    
-    delays_before = []
-    delays_after = []
-    
-    for appr in range(1, n_appr+1):
-        delays_before.append(approach_delay(C,greens0[appr-1],s[appr],vehs[appr],n_virtual[appr]))
-        delays_after.append(approach_delay(C,greens_opt[appr-1],s[appr],vehs[appr],n_virtual[appr]))
-    
-    df = pd.DataFrame(list(zip(approaches, greens0, greens_opt, delays_before, delays_after)),
-               columns = ['Intersection Approach', 'Initial Green (s)', 'Optimal Green (s)', 'Initial Control Delay (s/PCE)', 'Optimal Control Deleay (s/PCE)'])
-    
-    fig2 = go.Figure(data=[
-        go.Bar(name='Initial Green Times', x=df['Intersection Approach'], y=df['Initial Green (s)']),
-        go.Bar(name='Optimal Green Times', x=df['Intersection Approach'], y=df['Optimal Green (s)'])
-    ])
-    # Change the bar mode
-    fig2.update_layout(barmode='group')
-    st.plotly_chart(fig2, use_container_width=True)
-    
-    cl1, cl2, cl3 = st.columns(3)
-    cl1.metric("Initial Intersection Delay", str(round(inter_delay_before, 1))+" s/PCE")
-    cl2.metric("Optimal Intersection Delay", str(round(inter_delay_after, 1))+" s/PCE")
-    cl3.metric("Reduction in Intersection Delay", str(red_perc)+" %")
+    with st.container():
+        st.header("Optimal Singal Timings")
+        
+        fun0 = obj_function(greens0)
+        res = minimize(obj_function, greens0, method='trust-constr',
+                       tol = 0.0001, bounds=bounds)    
+        greens_opt = list(np.round(res.x, 1))
+        eff_green_opt = sum(greens_opt)
+        C_opt = eff_green_opt + l*n_appr
+        inter_delay_after = (np.round(res.fun,1))
+        inter_delay_before = (np.round(fun0,1))
+        red_perc = round(100*(inter_delay_before - inter_delay_after)/inter_delay_before,1)
+        
+        delays_before = []
+        delays_after = []
+        
+        for appr in range(1, n_appr+1):
+            delays_before.append(approach_delay(C,greens0[appr-1],s[appr],vehs[appr],n_virtual[appr]))
+            delays_after.append(approach_delay(C_opt,greens_opt[appr-1],s[appr],vehs[appr],n_virtual[appr]))
+        
+        df = pd.DataFrame(list(zip(approaches, greens0, greens_opt, delays_before, delays_after)),
+                   columns = ['Intersection Approach', 'Initial Green (s)', 'Optimal Green (s)', 'Initial Control Delay (s/PCE)', 'Optimal Control Delay (s/PCE)'])
+        
+        fig2 = go.Figure(data=[
+            go.Bar(name='Initial Green Times', x=df['Intersection Approach'], y=df['Initial Green (s)']),
+            go.Bar(name='Optimal Green Times', x=df['Intersection Approach'], y=df['Optimal Green (s)'])
+        ])
+        # Change the bar mode
+        fig2.update_layout(barmode='group',
+                           xaxis_title='Intersection Approach',
+                           yaxis_title='Gren time (seconds)',
+                           template = 'presentation')
+        st.subheader("Comparison of Green Times")
+        st.plotly_chart(fig2, use_container_width=True)
+        
+    with st.container():
+        fig3 = go.Figure()
+        
+        fig3.add_trace(go.Scatterpolar(
+              r=df['Initial Control Delay (s/PCE)'],
+              theta=list(map(str, list(df['Intersection Approach'].values))),
+              fill='toself',
+              name='Initial Approach Delays'
+        ))
+        fig3.add_trace(go.Scatterpolar(
+              r=df["Optimal Control Delay (s/PCE)"],
+              theta=list(map(str, list(df['Intersection Approach'].values))),
+              fill='toself',
+              name='Optimal Approach Delays'
+        ))
+        
+        fig3.update_layout(
+            template = 'plotly_dark',
+            polar = dict(
+                radialaxis=dict(
+                    title = 'Control Delay (PCE/s)',
+                    showgrid = True
+                    )
+                )
+            )
+        
+        # fig3.update_layout(
+        #   # polar=dict(
+        #   #   radialaxis=dict(
+        #   #     visible=True,
+        #   #     range = [1, n_appr]
+        #   #     #range=[0, 5]
+        #   #   )),
+        #   # yaxis_title = 'Control Delay (PCE/s)',
+        #   template = 'presentation',
+        #   #showlegend=True
+        # )
+        
+        st.subheader("Comparison of Approach Delays")
+        st.plotly_chart(fig3, use_container_width=True)
+
+    with st.container():
+        cl1, cl2, cl3 = st.columns(3)
+        cl1.metric("Initial Intersection Delay", str(round(inter_delay_before, 1))+" s/PCE")
+        cl2.metric("Optimal Intersection Delay", str(round(inter_delay_after, 1))+" s/PCE")
+        cl3.metric("Reduction in Intersection Delay", str(red_perc)+" %")
+                
+  
