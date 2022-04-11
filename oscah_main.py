@@ -138,19 +138,28 @@ with st.expander('Input Parameters'):
     pce = {'Two-wheeler': 0.78, 'Three-wheeler': 1.92, 'Heavy-vehicles': 3.42}
     st.write("________________________________________________________________________________________")
     st.write("Do you know the Passenger Car Equivalent Values of all the vehicle types?")
-    pc_cols = st.columns(2)
-    with pc_cols[0]:
-        st.write("if unknown, the folowing default values will be used: ")
-        st.table(pce_df)
+    st.write("if unknown, the folowing default values will be used: ")
+    st.subheader('Default PCE values')
+    pc_cols = st.columns(4)
+
+    pc_cols[0].metric("Car", 1.00)
+    pc_cols[1].metric("Two-Wheeler", 0.78)
+    pc_cols[2].metric("Three-Wheeler", 1.92)
+    pc_cols[3].metric("Heavy Vehicle", 3.42)
+        # st.table(pce_df)
     
-    with pc_cols[1]:
-        pce_enter = st.checkbox('PCE values known?')
-        if pce_enter:
-            for veh in pce:
-                pce_used[veh] = float(st.text_input(f'Enter the PCE value for {veh}: ', pce[veh],
+    pce_enter = st.checkbox('PCE values known?')
+    if pce_enter:
+        st.write("Enter desired PCE values")
+        p_col = st.columns(3)
+        cou = 0
+        for veh in pce:
+            with p_col[cou]:
+                pce_used[veh] = float(st.text_input(f'{veh}: ', pce[veh],
                                                key = 'pce_user_'+str(veh)))
-        else:
-            pce_used = pce
+            cou = cou+1
+    else:
+        pce_used = pce
 
     # %% Vehicle demand
     st.write("________________________________________________________________________________________")
@@ -330,3 +339,4 @@ with st.expander("Signal Optimisation", opt_bool):
         cl2.metric("Optimal Intersection Delay", str(round(inter_delay_after, 1))+" s/PCE")
         cl3.metric("Reduction in Intersection Delay", str(red_perc)+" %")
                 
+  
