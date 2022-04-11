@@ -9,6 +9,7 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import plotly.express as px
+import openpyxl
 import math
 import plotly.express as px
 import plotly.graph_objects as go
@@ -22,7 +23,7 @@ n_actual = {}
 n_virtual = {}
 pce_used = {}
 vehs = {}
-vehs_pce_default = {1:1900, 2:800, 3:1500, '4':900}
+vehs_pce_default = {1:1900, 2:800, 3:1500, 4:900}
 cars = {}
 cars_default = {1:900, 2:350, 3:700, 4:400}
 two_wheelers = {}
@@ -82,52 +83,69 @@ def obj_function(greens):
 
 #%%
 
-
+# st.set_page_config(layout='wide')
 #Title
 st.title('Optimal Signal Control and Analysis for Heterogeneous and Lane-Free Traffic (OSCAH)')
 
 with st.expander('Input Parameters'):
-    col1, col2 = st.columns(2)
-    with col1:
+    with st.container():
         st.header('Field Calibration Constants')
-        
+        # st.subheader('Intersection specific constants')
+
+        col1, col2 = st.columns(2)
         # %% Sat flow
-        st.subheader('Intersection specific constants')
-        sat_flow_rate = float(st.text_input("Enter the field measured saturation flow in PCE/hr/lane (if known)",
-                                      2900, key = 'sat_flow_input'))
+        with col1:
+            sat_flow_rate = float(st.text_input("Enter saturation flow rate in PCE/hr/lane (if known)",
+                                          2900, key = 'sat_flow_input'))
         
         # %% Actual lanes
-        n_appr = int(st.text_input('Enter the number of intersection approaches', 4, key = 'n_appr_input'))
-        for appr in range(1, n_appr+1):
-            n_actual[appr] = int(st.text_input(f'Enter the actual number of lanes present in approach {appr}: ', 3,
-                                           key = 'n_actual_'+str(appr)))
-            s[appr] = sat_flow_rate*n_actual[appr]
+        with col2:
+            n_appr = int(st.text_input('Enter the number of intersection approaches', 4, key = 'n_appr_input'))
         
+        with st.container():
+            st.write("________________________________________________________________________________________")
+            st.write("Enter the number of lanes in each Approach")
+            lanes_columns = st.columns(n_appr)
+            for appr in range(1, n_appr+1):
+                with lanes_columns[appr-1]:
+                    n_actual[appr] = int(st.text_input(f'Approach {appr}: ', 3,
+                                                   key = 'n_actual_'+str(appr)))
+                    s[appr] = sat_flow_rate*n_actual[appr]
         
-        # %% Virtual lanes
+    
+    # %% Virtual lanes
+    with st.container():
+        st.write("________________________________________________________________________________________")
         st.write("Do you know the number of parallel movmeents / virtual lanes present in each approach? \
                  \n If unknown, please leave the checkbox unselected. A default value of number of actual lanes plus 2 will be\
                      taken as the number of virtual lanes")
         n_virt_enter = st.checkbox('Number of parallel movements / virtual lanes known?')
         
         if n_virt_enter:
+            st.write('Enter the number of virtual lanes / parallel movements in each approach')
+            virtual_lanes_columns = st.columns(n_appr)
             for appr in range(1, n_appr+1):
-                n_virtual[appr] = int(st.text_input(f'Enter the number of parallel movmeents in approach {appr}: ', 5,
-                                               key = 'n_virtual_'+str(appr)))
+                with virtual_lanes_columns[appr-1]:
+                    n_virtual[appr] = int(st.text_input(f'Approach {appr}: ', 5,
+                                                   key = 'n_virtual_'+str(appr)))
         else:
             for appr in range(1, n_appr+1):
                 n_virtual[appr] = n_actual[appr] + 2
-                
-        # %% PCE 
-        pce_df = {'Vehicle Type': ['Car', 'Two Wheeler', 'Three Wheeler', 'Heavy Vehicles'],
-               'PCE Value': [1,0.78,1.92,3.42]}
-        pce_df = pd.DataFrame(pce_df)
-        pce = {'Two-wheeler': 0.78, 'Three-wheeler': 1.92, 'Heavy-vehicles': 3.42}
-        st.write("Do you know the Passenger Car Equivalent Values of all the vehicle types? \
-                 \n if unknown, please leave the checkbox unchekced. Default values will be taken as follows:")
+            
+    # %% PCE 
+    pce_df = {'Vehicle Type': ['Car', 'Two Wheeler', 'Three Wheeler', 'Heavy Vehicles'],
+           'PCE Value': [1,0.78,1.92,3.42]}
+    pce_df = pd.DataFrame(pce_df)
+    pce = {'Two-wheeler': 0.78, 'Three-wheeler': 1.92, 'Heavy-vehicles': 3.42}
+    st.write("________________________________________________________________________________________")
+    st.write("Do you know the Passenger Car Equivalent Values of all the vehicle types?")
+    pc_cols = st.columns(2)
+    with pc_cols[0]:
+        st.write("if unknown, the folowing default values will be used: ")
         st.table(pce_df)
+    
+    with pc_cols[1]:
         pce_enter = st.checkbox('PCE values known?')
-        
         if pce_enter:
             for veh in pce:
                 pce_used[veh] = float(st.text_input(f'Enter the PCE value for {veh}: ', pce[veh],
@@ -136,51 +154,66 @@ with st.expander('Input Parameters'):
             pce_used = pce
 
     # %% Vehicle demand
-    with col2:
-        st.header('Traffic Demand and Signal Timiings')
-        st.subheader("Traffic Demand Inputs")
-        st.write("Do you know the approachwise demand in PCE/hr? \
-                 \n If unknown, please leave the checkbox unselected and you will be prompted to\
-                 \n enter class specific vehicle counts")
-        demand_pce_enter = st.checkbox('Demand values in PCE known?')
-        
-        if demand_pce_enter:
-            for appr in range(1, n_appr+1):
-                vehs[appr] = float(st.text_input(f'Enter the traffic demand in PCE/hr in approach {appr}: ',
+    st.write("________________________________________________________________________________________")
+    st.header('Traffic Demand and Signal Timiings')
+    st.subheader("Traffic Demand Inputs")
+    st.write("Do you know the approachwise demand in PCE/hr? If unknown, please leave the checkbox unselected and you will be prompted to enter class specific vehicle counts")
+    demand_pce_enter = st.checkbox('Demand values in PCE known?')
+    
+    if demand_pce_enter:
+        st.write("Enter the traffic demand in PCE/hr for each approach")
+        pce_appr_columns = st.columns(n_appr)
+        for appr in range(1, n_appr+1):
+            with pce_appr_columns[appr-1]:
+                vehs[appr] = float(st.text_input(f'Approach {appr}: ',
                                                vehs_pce_default[appr], key = 'vehs_pce_'+str(appr)))
-        else:
-            for appr in range(1, n_appr+1):
-                cars[appr] = int(st.text_input(f'Enter the number of cars in approach {appr}: ', 
+    else:
+        for appr in range(1, n_appr+1):
+            st.write(f"Enter number of vehicles in each class for approach {appr}")
+            class_appr_columns = st.columns(4)
+            with class_appr_columns[0]:
+                cars[appr] = int(st.text_input('Cars: ', 
                                                cars_default[appr], key = 'cars_pce_'+str(appr)))
-                two_wheelers[appr] = int(st.text_input(f'Enter the number of two wheelers in approach {appr}: ', 
+            with class_appr_columns[1]:
+                two_wheelers[appr] = int(st.text_input('Two wheelers: ', 
                                                two_wheelers_default[appr], key = 'two_wheelers_pce_'+str(appr)))
-                three_wheelers[appr] = int(st.text_input(f'Enter the number of three wheelers in approach {appr}: ', 
+            with class_appr_columns[2]:
+                three_wheelers[appr] = int(st.text_input('Tthree wheelers: ', 
                                                three_wheelers_default[appr], key = 'three_wheelers_pce_'+str(appr)))
-                heavy_vehicles[appr] = int(st.text_input(f'Enter the number of heavy vehicles in approach {appr}: ', 
+            with class_appr_columns[3]:
+                heavy_vehicles[appr] = int(st.text_input('Heavy vehicles: ', 
                                                heavy_vehicles_default[appr], key = 'heavy_vehicles_pce_'+str(appr)))
-                vehs[appr] = cars[appr]+ pce['Two-wheeler']*two_wheelers[appr]+ pce['Three-wheeler']*three_wheelers[appr]+ pce['Heavy-vehicles']*heavy_vehicles[appr]
-                            
+                
+            vehs[appr] = cars[appr]+ pce['Two-wheeler']*two_wheelers[appr]+ pce['Three-wheeler']*three_wheelers[appr]+ pce['Heavy-vehicles']*heavy_vehicles[appr]
+                        
         
     # %% Signal timings
-        st.subheader("Signal Timing Input")
-        l = int(st.text_input('Enter lost time per phase', 4, key = 'lost_time'))
-        st.write('Enter the effective green times provided')
-        a = {} 
-        a['v'] = list(vehs.values())
-        a['s'] = list(s.values())
-        a['n'] = list(n_virtual.values())
-        demand = pd.DataFrame(a)
-        demand['v_s'] = demand.v / demand.s
-        greens0 = webster_timings(demand)
-        bounds = []
-        for appr in range(1, n_appr+1):
-            greens[appr] = float(st.text_input(f'The effective green time for approach {appr}: ', 
+    st.write("________________________________________________________________________________________")
+    st.subheader("Signal Timing Input")
+    l = int(st.slider('What is the lost time per phase', 0, 10, 4, key = 'lost_time'))
+    st.write('Enter the effective green times of each approach')
+    greens_columns = st.columns(n_appr)
+    a = {} 
+    a['v'] = list(vehs.values())
+    a['s'] = list(s.values())
+    a['n'] = list(n_virtual.values())
+    demand = pd.DataFrame(a)
+    demand['v_s'] = demand.v / demand.s
+    greens0 = webster_timings(demand)
+    bounds = []
+    for appr in range(1, n_appr+1):
+        with greens_columns[appr-1]:
+            greens[appr] = float(st.text_input(f'Approach {appr}: ', 
                                            int(greens0[appr-1]), key = 'greens_'+str(appr)))
-            bounds.append([8,201])
-        bounds = tuple(bounds)  
-        eff_green = sum(greens.values())
-        C = eff_green + l*n_appr
+        bounds.append([8,201])
+    bounds = tuple(bounds)  
+    eff_green = sum(greens.values())
+    C = eff_green + l*n_appr
+    st.write("______________________________________________________________________________________")
+    button_columns = st.columns(3)
+    with button_columns[1]:
         calc_bool = st.button('Calculate Delays')
+    with button_columns[2]:
         opt_bool = st.button('Optimise Signal Timings')
         
 # %% DELAY CALCULATION
@@ -203,6 +236,7 @@ with st.expander('Delay calculation', calc_bool):
     c1, c2 = st.columns(2)
     with c1:
         fig = px.bar(delays_df, x= 'Intersection Approach' , y = 'Control delay (s/PCE)')
+        fig.update_layout(template = 'plotly_dark')
         st.plotly_chart(fig, use_container_width=True)
     
     with c2:
@@ -250,13 +284,16 @@ with st.expander("Signal Optimisation", opt_bool):
             go.Bar(name='Initial Green Times', x=df['Intersection Approach'], y=df['Initial Green (s)']),
             go.Bar(name='Optimal Green Times', x=df['Intersection Approach'], y=df['Optimal Green (s)'])
         ])
-        # Change the bar mode
+
         fig2.update_layout(barmode='group',
                            xaxis_title='Intersection Approach',
                            yaxis_title='Gren time (seconds)',
-                           template = 'presentation')
-        st.subheader("Comparison of Green Times")
+                           template = 'plotly_dark')
+        st.subheader("Comparison of the sighnal timings")
         st.plotly_chart(fig2, use_container_width=True)
+        c_cols = st.columns(3)
+        c_cols[1].metric("Optimal Cycle Time", str(round(sum(greens_opt))+l*n_appr)+" seconds", str(round(sum(greens_opt)) - round(sum(greens0)))+' seconds')
+
         
     with st.container():
         fig3 = go.Figure()
@@ -283,19 +320,8 @@ with st.expander("Signal Optimisation", opt_bool):
                     )
                 )
             )
-        
-        # fig3.update_layout(
-        #   # polar=dict(
-        #   #   radialaxis=dict(
-        #   #     visible=True,
-        #   #     range = [1, n_appr]
-        #   #     #range=[0, 5]
-        #   #   )),
-        #   # yaxis_title = 'Control Delay (PCE/s)',
-        #   template = 'presentation',
-        #   #showlegend=True
-        # )
-        
+    
+        st.write("________________________________________________________________________________________")
         st.subheader("Comparison of Approach Delays")
         st.plotly_chart(fig3, use_container_width=True)
 
