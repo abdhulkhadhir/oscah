@@ -9,13 +9,10 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import plotly.express as px
-import openpyxl
 import math
 import plotly.express as px
 import plotly.graph_objects as go
 from scipy.optimize import minimize, Bounds, brute
-
-
 
 # %% Constants initialisation
 n_lanes = {'EB': 2, 'WB': 2, 'NB': 2, 'SB' : 2}
