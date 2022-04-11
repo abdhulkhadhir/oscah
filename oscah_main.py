@@ -166,7 +166,7 @@ with st.expander('Input Parameters'):
     st.header('Traffic Demand and Signal Timiings')
     st.subheader("Traffic Demand Inputs")
     st.write("Do you know the approachwise demand in PCE/hr? If unknown, please leave the checkbox unselected and you will be prompted to enter class specific vehicle counts")
-    demand_pce_enter = st.checkbox('Demand values in PCE known?')
+    demand_pce_enter = st.checkbox('Demand values in PCE known?', True)
     
     if demand_pce_enter:
         st.write("Enter the traffic demand in PCE/hr for each approach")
