@@ -14,6 +14,8 @@ import plotly.express as px
 import plotly.graph_objects as go
 from scipy.optimize import minimize, Bounds, brute
 
+
+
 # %% Constants initialisation
 n_lanes = {'EB': 2, 'WB': 2, 'NB': 2, 'SB' : 2}
 n_actual = {}
@@ -230,7 +232,7 @@ with st.expander('Delay calculation', calc_bool):
                columns =['Intersection Approach', 'Control delay (s/PCE)', 'Total Control delay (s)'])
     intersection_delay= sum(tot_delay)/sum(vehs.values())
     
-    c1, c2 = st.columns(2)
+    c1, c2 = st.columns([4,3])
     with c1:
         fig = px.bar(delays_df, x= 'Intersection Approach' , y = 'Control delay (s/PCE)')
         fig.update_layout(template = 'plotly_dark')
@@ -288,7 +290,7 @@ with st.expander("Signal Optimisation", opt_bool):
                            template = 'plotly_dark')
         st.subheader("Comparison of the sighnal timings")
         st.plotly_chart(fig2, use_container_width=True)
-        c_cols = st.columns(3)
+        c_cols = st.columns([4,3,4])
         c_cols[1].metric("Optimal Cycle Time", str(round(sum(greens_opt))+l*n_appr)+" seconds", str(round(sum(greens_opt)) - round(sum(greens0)))+' seconds')
 
         
@@ -328,4 +330,3 @@ with st.expander("Signal Optimisation", opt_bool):
         cl2.metric("Optimal Intersection Delay", str(round(inter_delay_after, 1))+" s/PCE")
         cl3.metric("Reduction in Intersection Delay", str(red_perc)+" %")
                 
-  
